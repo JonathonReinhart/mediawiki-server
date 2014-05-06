@@ -19,10 +19,13 @@ class MediaWikiData(object):
             title = page.find('mw:title', namespaces=self.namespaces).text
             yield title
 
-    def getpage(self, title):
+    def getpage(self, title, case_sensitive=False):
         for page in self.root.iterfind('mw:page', namespaces=self.namespaces):
             page_title = page.find('mw:title', namespaces=self.namespaces).text
-            if page_title == title: break
+            if case_sensitive:
+                if page_title == title: break
+            else:
+                if page_title.lower() == title.lower(): break
         else:
             return None
             
