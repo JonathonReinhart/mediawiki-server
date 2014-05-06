@@ -2,6 +2,7 @@ import sys
 import os, os.path
 import SimpleHTTPServer, SocketServer
 import xml.etree.ElementTree as ET
+import urllib
 
 import wikimarkup
 
@@ -48,7 +49,18 @@ class Wiki(object):
         
     def _internalLinkHook(self, parser_env, namespace, body):
         print 'internalLinkHook: ', parser_env, namespace, body
-        return body
+        
+        # Two forms:
+        # Text without | is taken to be both page title and display text
+        # Text with | is used as url|text
+        parts = body.split('|', 1)
+        if len(parts) == 2:
+            link, text = parts
+        else:
+            link = body
+            text = body
+        
+        return '<a href="/{0}/{1}">{2}</a>'.format(self.name, link, text)
         
 
 
@@ -112,7 +124,7 @@ class MyRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
         
         parts = self.path.split('/', 2)[1:]
         wiki_name = parts[0]
-        page_title = None if (len(parts) < 2) else parts[1]
+        page_title = None if (len(parts) < 2) else urllib.unquote(parts[1])
         return self._do_GET_wiki_page(wiki_name, page_title)
 
         '''
@@ -143,7 +155,7 @@ def main():
     # Start webserver
     server = SocketServer.TCPServer(('0.0.0.0', 8080), MyRequestHandler)
     server.wikis = {}
-    server.wikis['wiki'] = wiki
+    server.wikis[wiki.name] = wiki
     
     print 'Starting server...'
     server.serve_forever()
