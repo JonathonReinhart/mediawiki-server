@@ -1,15 +1,19 @@
 import sys
 import os, os.path
+import SimpleHTTPServer, SocketServer
 import xml.etree.ElementTree as ET
 
 import wikimarkup
 
+
+
 class MediaWiki(object):
 
-    def __init__(self, filename):
+    def __init__(self, filename, default_page):
         tree = ET.parse(filename)
         self.root = tree.getroot()
         self.namespaces = {'mw': 'http://www.mediawiki.org/xml/export-0.6/'}    # TODO: Make dynamic?
+        self.default_page = default_page
         
         
     def iterpages(self):
@@ -29,6 +33,99 @@ class MediaWiki(object):
         text = rev.find('mw:text', namespaces=self.namespaces).text
         return text  
             
+            
+
+
+class MyRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
+
+    def _send_404(self, message):
+        self.send_response(404)
+        self.send_header('Content-type','text/html')
+        self.end_headers()
+        self.wfile.write(message)
+        
+        
+    def _do_GET_root(self):
+        self.send_response(200)
+        self.send_header('Content-type','text/html')
+        self.end_headers()
+        
+        def w(s):
+            self.wfile.write(s + '\n')
+        w('<html>')
+        w('<head><title>Simple MediaWikiServer - Index</title></head>')
+        w('<body>')
+        w('<h1>Simple MediaWikiServer - Index</h1>')
+        w('<h2>Loaded Wikis:</h2>')
+        w('<ul>')
+        for k,v in self.server.wikis.iteritems():
+            w('<li><a href="/{0}">{0}</a></li>'.format(k))
+        w('</ul>')
+        w('</body>')
+        w('</html>')
+
+        
+    def _do_GET_wiki_page(self, wiki_name, page_title):
+        # Get the MediaWiki
+        mw = self.server.wikis.get(wiki_name)
+        if not mw:
+            return self._send_404('Wiki "{0}" not found'.format(wiki_name))
+    
+        # Try to get the page from the MediaWiki
+        if not page_title:
+            page_title = mw.default_page
+            print 'Using default page: {0}'.format(page_title)
+    
+        wiki_text = mw.getpage(page_title)
+        if not wiki_text:
+            return self._send_404('Page "{0}" not found in {1} wiki'.format(page_title, wiki_name))
+    
+        # Parse it to HTML
+        html = wikimarkup.parse(wiki_text)
+        
+        self.send_response(200)
+        self.send_header('Content-type','text/html')
+        self.end_headers()
+        self.wfile.write(html)
+        return
+        
+        
+    def do_GET(self):
+        # URL should look like:
+        # http://localhost:8080/wiki_name/page_title
+        
+        if self.path == '/':
+            return self._do_GET_root()
+        
+        parts = self.path.split('/', 2)[1:]
+        wiki_name = parts[0]
+        page_title = None if (len(parts) < 2) else parts[1]
+        return self._do_GET_wiki_page(wiki_name, page_title)
+
+        
+            
+        
+    def do_GET____sample(self):
+        # Interesting fields:
+        #   self.path
+        #   self.raw_requestline
+        #   self.client_address
+        
+        if self.path=='/test':
+            # We will handle it
+            self.send_response(200)
+            self.send_header('Content-type','text/html')
+            self.end_headers()
+            self.wfile.write('Yes, the test is working!')
+            return
+        else:
+            #serve files, and directory listings by following self.path from
+            #current working directory
+            SimpleHTTPServer.SimpleHTTPRequestHandler.do_GET(self)
+
+            
+            
+            
 
 def main():
     if len(sys.argv) < 3:
@@ -37,14 +134,25 @@ def main():
         
     xml_filename, default_page = sys.argv[1:]
         
-    mw = MediaWiki(xml_filename)
+    # Load the media wiki
+    mw = MediaWiki(xml_filename, default_page)
     
+    # Start webserver
+    server = SocketServer.TCPServer(('0.0.0.0', 8080), MyRequestHandler)
+    server.wikis = {}
+    server.wikis['wiki'] = mw
+    
+    
+    print 'Starting server...'
+    server.serve_forever()
+    
+    '''
     w = mw.getpage(default_page)
     
     html = wikimarkup.parse(w)
     
     open(default_page+'.html', 'w').write(html)
-    
+    '''
 
 if __name__ == '__main__':
     APPNAME = os.path.basename(sys.argv[0])
