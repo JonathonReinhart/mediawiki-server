@@ -50,9 +50,8 @@ class Wiki(object):
         html = self.parser.parse(wiki_text)
         return html
         
-    def _internalLinkHook(self, parser_env, namespace, body):
-        print 'internalLinkHook: ', parser_env, namespace, body
-        
+
+    def _internalLinkHook(self, parser, namespace, body):
         # Two forms:
         # Text without | is taken to be both page title and display text
         # Text with | is used as url|text
