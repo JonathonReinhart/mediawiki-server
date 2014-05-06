@@ -2,6 +2,7 @@ import sys
 import os, os.path
 import xml.etree.ElementTree as ET
 
+import wikimarkup
 
 class MediaWiki(object):
 
@@ -30,14 +31,23 @@ class MediaWiki(object):
             
 
 def main():
-    mw = MediaWiki('nes_pages_current.xml')
+    if len(sys.argv) < 3:
+        print 'Usage: {0} mediawiki_dump.xml "Default Page"'.format(APPNAME)
+        return 1
+        
+    xml_filename, default_page = sys.argv[1:]
+        
+    mw = MediaWiki(xml_filename)
     
-    p = mw.getpage('NES Wiki')
-    print p
-    open('NES_Wiki.wiki', 'w').write(p)
+    w = mw.getpage(default_page)
+    
+    html = wikimarkup.parse(w)
+    
+    open(default_page+'.html', 'w').write(html)
     
 
 if __name__ == '__main__':
+    APPNAME = os.path.basename(sys.argv[0])
     sys.exit(main())
     
     
