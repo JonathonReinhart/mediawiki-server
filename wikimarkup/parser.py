@@ -454,10 +454,19 @@ class BaseParser(object):
         self.env = env
         self.keep_env = (env != {})
         
+        self.tag_hooks = {}
+        self.internal_link_hooks = {}
+        
     def __del__(self):
         if not self.keep_env:
             global env
             env = {}
+            
+    def register_tag_hook(self, tag, function):
+        self.tag_hooks[tag] = function
+            
+    def register_internal_link_hook(self, tag, function):
+        self.internal_link_hooks[tag] = function
 
     def store_object(self, namespace, key, value=True):
         """
@@ -516,7 +525,7 @@ class BaseParser(object):
 
         commentState = {}
 
-        elements = ['nowiki',]  + mTagHooks.keys()
+        elements = ['nowiki',]  + self.tag_hooks.keys()
         if True: #wgRawHtml
             elements.append('html')
 
@@ -542,8 +551,8 @@ class BaseParser(object):
                 elif tagName == u'nowiki':
                     output = content.replace(u'&', u'&amp;').replace(u'<', u'&lt;').replace(u'>', u'&gt;')
                 else:
-                    if tagName in mTagHooks:
-                        output = mTagHooks[tagName](self, content, params)
+                    if tagName in self.tag_hooks:
+                        output = self.tag_hooks[tagName](self, content, params)
                     else:
                         output = content.replace(u'&', u'&amp;').replace(u'<', u'&lt;').replace(u'>', u'&gt;')
             else:
@@ -1101,12 +1110,12 @@ class BaseParser(object):
                 i += 1
             else:
                 space, name = bits[i:i+2]
-                if space in mInternalLinkHooks:
-                    sb.append(mInternalLinkHooks[space](self, space, name))
-                elif space and space.startswith(':') and ':' in mInternalLinkHooks:
-                    sb.append(mInternalLinkHooks[':'](self, space, name))
-                elif '*' in mInternalLinkHooks:
-                    sb.append(mInternalLinkHooks['*'](self, space, name))
+                if space in self.internal_link_hooks:
+                    sb.append(self.internal_link_hooks[space](self, space, name))
+                elif space and space.startswith(':') and ':' in self.internal_link_hooks:
+                    sb.append(self.internal_link_hooks[':'](self, space, name))
+                elif '*' in self.internal_link_hooks:
+                    sb.append(self.internal_link_hooks['*'](self, space, name))
                 elif bits[i]:
                     sb.append(u'[[%s:%s]]' % (bits[i], bits[i+1]))
                 else:
@@ -2263,12 +2272,16 @@ class Parser(BaseParser):
 def parse(text, showToc=True):
     """Returns HTML from MediaWiki markup"""
     p = Parser(show_toc=showToc)
+    p.tag_hooks = dict(mTagHooks)
+    p.internal_link_hooks = dict(mInternalLinkHooks)
     return p.parse(text)
 
 def parselite(text):
     """Returns HTML from MediaWiki markup ignoring
     without headings"""
     p = BaseParser()
+    p.tag_hooks = dict(mTagHooks)
+    p.internal_link_hooks = dict(mInternalLinkHooks)
     return p.parse(text)
 
 def truncate_url(url, length=40):
