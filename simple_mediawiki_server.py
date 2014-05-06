@@ -7,21 +7,17 @@ import wikimarkup
 
 
 
-class MediaWiki(object):
-
-    def __init__(self, filename, default_page):
+class MediaWikiData(object):
+    def __init__(self, filename):
         tree = ET.parse(filename)
         self.root = tree.getroot()
         self.namespaces = {'mw': 'http://www.mediawiki.org/xml/export-0.6/'}    # TODO: Make dynamic?
-        self.default_page = default_page
-        
-        
+
     def iterpages(self):
         for page in self.root.iterfind('mw:page', namespaces=self.namespaces):
             title = page.find('mw:title', namespaces=self.namespaces).text
             yield title
 
-            
     def getpage(self, title):
         for page in self.root.iterfind('mw:page', namespaces=self.namespaces):
             page_title = page.find('mw:title', namespaces=self.namespaces).text
@@ -33,7 +29,27 @@ class MediaWiki(object):
         text = rev.find('mw:text', namespaces=self.namespaces).text
         return text  
             
-            
+
+class Wiki(object):
+    def __init__(self, name, data, default_page):
+        self.name = name
+        self.data = data
+        self.default_page = default_page
+        
+        self.parser = wikimarkup.Parser()
+        self.parser.register_internal_link_hook(None, self._internalLinkHook)
+    
+    def getpage(self, title):
+        wiki_text = self.data.getpage(title)
+        if not wiki_text: return None
+        
+        html = self.parser.parse(wiki_text)
+        return html
+        
+    def _internalLinkHook(self, parser_env, namespace, body):
+        print 'internalLinkHook: ', parser_env, namespace, body
+        return body
+        
 
 
 class MyRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
@@ -67,22 +83,18 @@ class MyRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
         
     def _do_GET_wiki_page(self, wiki_name, page_title):
         # Get the MediaWiki
-        mw = self.server.wikis.get(wiki_name)
-        if not mw:
+        w = self.server.wikis.get(wiki_name)
+        if not w:
             return self._send_404('Wiki "{0}" not found'.format(wiki_name))
     
         # Try to get the page from the MediaWiki
         if not page_title:
-            page_title = mw.default_page
+            page_title = w.default_page
             print 'Using default page: {0}'.format(page_title)
-    
-        wiki_text = mw.getpage(page_title)
-        if not wiki_text:
+            
+        html = w.getpage(page_title)
+        if not html:
             return self._send_404('Page "{0}" not found in {1} wiki'.format(page_title, wiki_name))
-    
-        # Parse it to HTML
-        parser = wikimarkup.Parser()
-        html = parser.parse(wiki_text)
         
         self.send_response(200)
         self.send_header('Content-type','text/html')
@@ -109,8 +121,11 @@ class MyRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
         SimpleHTTPServer.SimpleHTTPRequestHandler.do_GET(self)
         '''
             
-        
-
+'''
+def internalLinkHook(parser_env, namespace, body):
+    print 'internalLinkHook: ', parser_env, namespace, body
+    return body
+'''
 
 def main():
     if len(sys.argv) < 3:
@@ -118,14 +133,17 @@ def main():
         return 1
         
     xml_filename, default_page = sys.argv[1:]
+    
+    #wikimarkup.registerInternalLinkHook(None, internalLinkHook)
         
     # Load the media wiki
-    mw = MediaWiki(xml_filename, default_page)
+    data = MediaWikiData(xml_filename)
+    wiki = Wiki('wiki', data, default_page)
     
     # Start webserver
     server = SocketServer.TCPServer(('0.0.0.0', 8080), MyRequestHandler)
     server.wikis = {}
-    server.wikis['wiki'] = mw
+    server.wikis['wiki'] = wiki
     
     print 'Starting server...'
     server.serve_forever()
