@@ -81,7 +81,8 @@ class MyRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
             return self._send_404('Page "{0}" not found in {1} wiki'.format(page_title, wiki_name))
     
         # Parse it to HTML
-        html = wikimarkup.parse(wiki_text)
+        parser = wikimarkup.Parser()
+        html = parser.parse(wiki_text)
         
         self.send_response(200)
         self.send_header('Content-type','text/html')
@@ -102,30 +103,14 @@ class MyRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
         page_title = None if (len(parts) < 2) else parts[1]
         return self._do_GET_wiki_page(wiki_name, page_title)
 
-        
+        '''
+        # serve files, and directory listings by following self.path from
+        # current working directory
+        SimpleHTTPServer.SimpleHTTPRequestHandler.do_GET(self)
+        '''
             
         
-    def do_GET____sample(self):
-        # Interesting fields:
-        #   self.path
-        #   self.raw_requestline
-        #   self.client_address
-        
-        if self.path=='/test':
-            # We will handle it
-            self.send_response(200)
-            self.send_header('Content-type','text/html')
-            self.end_headers()
-            self.wfile.write('Yes, the test is working!')
-            return
-        else:
-            #serve files, and directory listings by following self.path from
-            #current working directory
-            SimpleHTTPServer.SimpleHTTPRequestHandler.do_GET(self)
 
-            
-            
-            
 
 def main():
     if len(sys.argv) < 3:
@@ -142,17 +127,9 @@ def main():
     server.wikis = {}
     server.wikis['wiki'] = mw
     
-    
     print 'Starting server...'
     server.serve_forever()
     
-    '''
-    w = mw.getpage(default_page)
-    
-    html = wikimarkup.parse(w)
-    
-    open(default_page+'.html', 'w').write(html)
-    '''
 
 if __name__ == '__main__':
     APPNAME = os.path.basename(sys.argv[0])
